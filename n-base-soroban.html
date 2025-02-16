@@ -246,7 +246,7 @@
         return;
       }
       if (isNaN(digitCount) || digitCount < 1) {
-        alert("正しい桁数を入力してください。");
+        alert("正しい桁数 (1以上) を入力してください。");
         return;
       }
       const beads = getBeads(base);
@@ -302,19 +302,70 @@
       initSoroban(nInput.value, digitCountInput.value);
     });
 
-    // ＋1ボタン：現在の値に1を足し、mod 演算で更新
-    incrementButton.addEventListener("click", function() {
-      const currentValue = calculateOverallValue();
-      const newValue = currentValue + 1;
-      updateAbacusForValue(newValue, true);
+    // 長押し用の変数（＋ボタン）
+    let incTimeout = null;
+    let incInterval = null;
+    let incLongPress = false;
+
+    // ＋1ボタンのイベント
+    incrementButton.addEventListener("mousedown", function() {
+    incLongPress = false;
+    // 長押しタイマーをセット（1.0秒後に連続処理開始）
+    incTimeout = setTimeout(function() {
+    incLongPress = true;
+    incInterval = setInterval(function() {
+        const currentValue = calculateOverallValue();
+        updateAbacusForValue(currentValue + 1, true);
+    }, 100); // 100msごとに＋1
+    }, 1000);
     });
 
-    // −1ボタン：現在の値から1を引き、mod 演算で更新
-    decrementButton.addEventListener("click", function() {
-      const currentValue = calculateOverallValue();
-      const newValue = currentValue - 1;
-      updateAbacusForValue(newValue, true);
+    incrementButton.addEventListener("mouseup", function() {
+    clearTimeout(incTimeout);
+    clearInterval(incInterval);
+    // 長押しにならなかった場合はワンクリックとして＋1
+    if (!incLongPress) {
+    const currentValue = calculateOverallValue();
+    updateAbacusForValue(currentValue + 1, true);
+    }
     });
+
+    incrementButton.addEventListener("mouseleave", function() {
+    clearTimeout(incTimeout);
+    clearInterval(incInterval);
+    });
+
+    // 同様に、−1ボタンの長押し用の変数
+    let decTimeout = null;
+    let decInterval = null;
+    let decLongPress = false;
+
+    // −1ボタンのイベント
+    decrementButton.addEventListener("mousedown", function() {
+    decLongPress = false;
+    decTimeout = setTimeout(function() {
+    decLongPress = true;
+    decInterval = setInterval(function() {
+        const currentValue = calculateOverallValue();
+        updateAbacusForValue(currentValue - 1, true);
+    }, 100);
+    }, 1500);
+    });
+
+    decrementButton.addEventListener("mouseup", function() {
+    clearTimeout(decTimeout);
+    clearInterval(decInterval);
+    if (!decLongPress) {
+    const currentValue = calculateOverallValue();
+    updateAbacusForValue(currentValue - 1, true);
+    }
+    });
+
+    decrementButton.addEventListener("mouseleave", function() {
+    clearTimeout(decTimeout);
+    clearInterval(decInterval);
+    });
+
 
     // 直接値入力の「設定」ボタン：エラーチェック付き
     setValueButton.addEventListener("click", function() {
@@ -326,6 +377,85 @@
       // useMod を false にして、範囲外ならエラー
       updateAbacusForValue(newVal, false);
     });
+
   </script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+  
+
+<footer style="margin-top: 40px; padding: 20px; border-top: 1px solid #ccc; text-align: left;">
+    <h2>このサイトについて</h2>
+    <p>
+      そろばんは非電気的なデジタルな計算ツールです。<br>
+      僕も電気的供給が得られない過酷な環境(宇宙空間)などでは、そろばんを弾いて3体問題の数値解析などをしたものです。<br>
+      日常では欠かせなくなったLLMなどの推論も、実はサーバーの中にいる"中の人"がそろばんで弾じき電力消費を抑えているのは有名な話でしょう。<br><br>
+      
+      そんな便利なツールであるそろばんですが、みなさん疑問に思いませんか。<br>
+      なぜそろばんは上側に1つの珠、下側に4つの珠を置くのでしょうか？<br>
+      それは1つの軸で0~9までの数を表すためです。<br>
+      つまり、一般に流通するそろばんは10進法利用者のためのツールとなっているのです。<br><br>
+      
+      10は別に特別な数字ではありません。素数ではありません。<br>
+      10進法と合わない文化・言語圏は世界には存在します。<br><br>
+      
+      コンピュータを日常的に使う人にとっては2進法や8進法、16進法の方がより馴染み深いものです。<br><br>
+      
+      「10進法至上主義」に基づいて、様々なものが10進法で表記され、製品が作られる世の中。<br>
+      特定の記数法に囚われることなく、自由な世界を創造するのが記数法自由主義の使命です。<br><br>
+      
+      ここは、任意のn進法による10進法そろばんの一般化である「n進法そろばん (n-base-soroban)」を体験することのできるサイトです。<br>
+      10進法ではないそろばんを色々触って楽しんでくれると幸いです。
+    </p>
+  
+    <h2>数学的背景とn進法そろばんの仕組み</h2>
+    <p>
+      通常の記数法では、各桁は固定の基数を用いて、右端から順に \( n^0, n^1, n^2, \dots \) の重みが付けられます。<br>
+      しかし、本ツールでは、各桁を複数の段（ステージ）に分け、各段が独自の状態数を持つことで、その桁の値を表現します。
+    </p>
+    <p>
+      ここで、ある桁を構成する段の状態数をそれぞれ <em>a₁, a₂, …, aₘ</em> と定義します。<br>
+      伝統的な10進法そろばんでは、たとえば最下段に5つ（状態数5）、上段に1つ（状態数2）の珠が配置されます。<br>
+      それに倣い、本ツールでは視認性や操作性を考慮して、最下段に最大の状態数を割り当てる、すなわち<br>
+      \( a₁ \ge a₂ \ge \cdots \ge aₘ \) となるようにしています。(これは伝統的なそろばんのデザインと一致させるためです)
+    </p>
+    <p>
+      各段の現在の状態を \( s₁, s₂, \dots, sₘ \)（ただし \( 0 \le sᵢ < aᵢ \)）とすると、1桁の値 \( V \) は以下の式で求められます：
+    </p>
+    <p style="text-align: center;">
+      \( V = \displaystyle \sum_{i=1}^{m} s_i \cdot \left( \prod_{j=1}^{i-1} a_j \right) \)
+    </p>
+    <p>
+      ここで、下段を \( i = 1 \) として、空の積 \( \prod_{j=1}^{0} a_j \) は 1 と定義されます。<br>
+      すなわち、<br>
+      - 最下段（\( i = 1 \)）の値は \( s_1 \times 1 \)<br>
+      - 次の段（\( i = 2 \)）の値は \( s_2 \times a₁ \)<br>
+      - さらに三段目（\( i = 3 \)）の値は \( s_3 \times (a₁ \times a₂) \)<br>
+      といった形で、各段の状態とその重みが乗じられ、全体の値が決定されます。
+    </p>
+    <p>
+      さらに、全体の数値は各桁の値を、右端から左端へ順に \( n \) の累乗で重み付けして合算します。<br>
+      もし右端から \( k \) 番目の桁の値を \( V_k \) とすると、全体の数値 \( N \) は以下の式で表されます：
+    </p>
+    <p style="text-align: center;">
+      \( N = \displaystyle \sum_{k \ge 0} V_k \cdot n^k \)
+    </p>
+    <p>
+      以上が、n進法そろばんの数学的説明になります。<br>
+      これに基づき、本ツールは、任意の \( n \) 進法に対応したそろばんを実装しています。<br>
+    </p>
+    
+    
+  
+    <h3>開発者情報</h3>
+    ご意見やお問い合わせは、TwitterのDMやメンションをお願いします。<br>
+    数学的説明の不備とかあれば遠慮なくお願いします<br>
+    <p>
+      Twitter/X：<a href="https://x.com/lovemeasure9" target="_blank" rel="noopener noreferrer">@lovemeasure9</a> <br>
+      GitHub：<a href="https://github.com/lovemeasure/n-base-soroban" target="_blank" rel="noopener noreferrer">https://github.com/lovemeasure/n-base-soroban</a> <br>
+    </p>
+  </footer>
+  
 </body>
 </html>
