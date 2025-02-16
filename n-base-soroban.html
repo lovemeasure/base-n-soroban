@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>n進法一般化そろばん</title>
+  <title>n-base-soroban</title>
   <style>
     body {
       font-family: sans-serif;
@@ -12,24 +12,68 @@
     h1 {
       margin-bottom: 10px;
     }
+    .controls {
+      margin-bottom: 20px;
+    }
+    .controls input {
+      font-size: 16px;
+      padding: 5px;
+      width: 80px;
+      margin: 0 10px;
+    }
+    .controls button {
+      font-size: 16px;
+      padding: 5px 10px;
+      margin: 0 5px;
+    }
+    /* そろばん全体のコンテナ */
     .soroban-container {
-      display: inline-block;
-      margin-top: 20px;
-      border: 2px solid #ccc;
+      display: block;
+      margin: 0 auto;
       padding: 20px;
+      border: 2px solid #ccc;
       border-radius: 10px;
+      max-width: 100%;
     }
-    .stage {
-      margin: 10px;
+    /* 各桁のコンテナ（横並びにする） */
+    #digits-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    /* 各桁 */
+    .digit-widget {
+      border: 1px solid #888;
+      border-radius: 5px;
+      padding: 5px;
+      background: #f9f9f9;
+    }
+    /* 各段（stage）を縦並びに */
+    .digit-widget .stage {
+      margin: 5px 0;
       cursor: pointer;
+      border-bottom: 1px solid #aaa;
+      padding-bottom: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
     }
+    /* 最下段には境界線をつけない */
+    .digit-widget .stage:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    /* ビーズの表示 */
     .bead {
-      display: inline-block;
+      display: block;
       width: 30px;
       height: 30px;
       border: 2px solid #333;
       border-radius: 50%;
-      margin: 5px;
+      margin: 3px auto;
       line-height: 30px;
       text-align: center;
       font-size: 18px;
@@ -42,53 +86,80 @@
       font-size: 24px;
       margin-top: 20px;
     }
-    #n-select {
-      font-size: 16px;
-      padding: 5px;
-    }
   </style>
 </head>
 <body>
-  <h1>n進法一般化そろばん</h1>
-  <div>
-    <label for="n-select">n進法の n を選択：</label>
-    <select id="n-select">
-      <option value="2">2進法</option>
-      <option value="6">6進法</option>
-      <option value="7">7進法</option>
-      <option value="8">8進法</option>
-      <option value="12" selected>12進法</option>
-      <option value="30">30進法</option>
-    </select>
+  <h1>n-base-soroban</h1>
+  <div class="controls">
+    <label for="n-input">n進法の n :</label>
+    <input type="number" id="n-input" value="12" min="2">
+    <label for="digit-count">桁数 :</label>
+    <input type="number" id="digit-count" value="6" min="1">
+    <button id="update-button">更新</button>
+    <button id="increment-button">＋1</button>
+    <button id="decrement-button">−1</button>
+    <br>
+    <label for="value-input">直接値入力 :</label>
+    <input type="number" id="value-input" value="0">
+    <button id="set-value-button">設定</button>
   </div>
 
   <!-- そろばんウィジェット -->
-  <div class="soroban-container" id="soroban-container"></div>
+  <div class="soroban-container">
+    <div id="digits-container"></div>
+  </div>
 
   <!-- 現在の値の表示 -->
   <div id="value-display">現在の値: 0</div>
 
   <script>
-    // プリセットの設定：各 n に対する段構成
-    // 配列の順番は「下段（1段目）、中段、上段…」の順です。
-    const configs = {
-      2: { beads: [2] },         // 2進法: 1段（2状態）
-      6: { beads: [3, 2] },       // 6進法: 下段3状態, 上段2状態
-      7: { beads: [7] },         // 7進法: 1段（7状態）
-      8: { beads: [2, 2, 2] },    // 8進法: 3段すべて2状態（8=2×2×2）
-      12: { beads: [3, 2, 2] },   // 12進法: 下段3状態, 中段2状態, 上段2状態
-      30: { beads: [5, 3, 2] }    // 30進法: 下段5状態, 中段3状態, 上段2状態
-    };
-
-    let currentConfig = null;
-    let currentStates = []; // 各段の現在の状態（下段～上段）
-    let weights = [];       // 各段の重み（下段から順に1, 下段の状態数, 下段×中段, …）
-
-    const sorobanContainer = document.getElementById("soroban-container");
+    // グローバル変数
+    let currentConfig = null; // { beads: [...] } 各桁の段設定（例: [3,2,2]）
+    let weights = [];         // 各段の重み（下段から順に計算：1, beads[0], beads[0]*beads[1], ...）
+    let base = 12;            // n進法の n
+    let digitCount = 6;       // 桁数
+    let digitStates = [];     // 各桁の状態。各要素は1桁の状態配列（下段～上段）
+    
+    // DOM要素
+    const digitsContainer = document.getElementById("digits-container");
     const valueDisplay = document.getElementById("value-display");
-    const nSelect = document.getElementById("n-select");
+    const nInput = document.getElementById("n-input");
+    const digitCountInput = document.getElementById("digit-count");
+    const updateButton = document.getElementById("update-button");
+    const incrementButton = document.getElementById("increment-button");
+    const decrementButton = document.getElementById("decrement-button");
+    const valueInput = document.getElementById("value-input");
+    const setValueButton = document.getElementById("set-value-button");
 
-    // 重みを計算する関数（下段から順に、初期値1から掛け合わせていく）
+    // 指定された n を素因数分解して、降順ソートした配列を返す
+    // nが素数なら1桁のそろばん（状態数 = n）となる
+    function getBeads(n) {
+      n = parseInt(n);
+      if (n < 2) return [1];
+      let factors = [];
+      let remaining = n;
+      // 2で割れる限り
+      while (remaining % 2 === 0) {
+        factors.push(2);
+        remaining /= 2;
+      }
+      let factor = 3;
+      while (factor * factor <= remaining) {
+        while (remaining % factor === 0) {
+          factors.push(factor);
+          remaining /= factor;
+        }
+        factor += 2;
+      }
+      if (remaining > 1) {
+        factors.push(remaining);
+      }
+      // 降順ソート（大きい因子を先頭にして、上段に配置）
+      factors.sort((a, b) => b - a);
+      return factors;
+    }
+
+    // 下段から順に重みを計算する関数
     function calculateWeights(beadsArray) {
       let w = [];
       let prod = 1;
@@ -99,83 +170,161 @@
       return w;
     }
 
-    // 現在の値を計算する関数
-    function calculateValue() {
+    // 1桁分の値を計算（各桁は0〜n-1の値を持つ）
+    function calculateDigitValue(stateArray) {
       let val = 0;
-      for (let i = 0; i < currentStates.length; i++) {
-        val += currentStates[i] * weights[i];
+      for (let i = 0; i < stateArray.length; i++) {
+        val += stateArray[i] * weights[i];
       }
       return val;
     }
 
-    // そろばんウィジェットを描画する関数
-    function renderSoroban() {
-      // クリア
-      sorobanContainer.innerHTML = "";
-      // 表示順序：上段を上に、下段を下に表示（configs.beads の順番は下段～上段なので逆順に描画）
-      const beadsArray = currentConfig.beads;
-      for (let stageIndex = beadsArray.length - 1; stageIndex >= 0; stageIndex--) {
-        const stageDiv = document.createElement("div");
-        stageDiv.className = "stage";
-        stageDiv.dataset.stageIndex = stageIndex; // どの段かを識別
+    // 複数桁の全体の値を計算する
+    // 各桁はn進法の数字として、左側が上位（重みは base^(digitCount-1-index)）
+    function calculateOverallValue() {
+      let overall = 0;
+      for (let i = 0; i < digitCount; i++) {
+        let digitValue = calculateDigitValue(digitStates[i]);
+        overall += digitValue * Math.pow(base, (digitCount - 1 - i));
+      }
+      return overall;
+    }
 
-        // クリックでその段の状態を更新（クリックごとに 1 加算、上限に達したら 0 に戻る）
-        stageDiv.addEventListener("click", function() {
-          const idx = parseInt(this.dataset.stageIndex);
-          currentStates[idx] = (currentStates[idx] + 1) % beadsArray[idx];
-          updateStageDisplay(this, idx);
-          updateValueDisplay();
-        });
-
-        // 各段のビーズ表示を初期化
-        updateStageDisplay(stageDiv, stageIndex);
-        sorobanContainer.appendChild(stageDiv);
+    // 各桁（digit widget）を描画する
+    function renderAllDigits() {
+      digitsContainer.innerHTML = "";
+      for (let d = 0; d < digitCount; d++) {
+        const digitDiv = document.createElement("div");
+        digitDiv.className = "digit-widget";
+        digitDiv.dataset.digitIndex = d;
+        // 各桁の段を上から下へ表示（上段が最上部）
+        for (let s = currentConfig.beads.length - 1; s >= 0; s--) {
+          const stageDiv = document.createElement("div");
+          stageDiv.className = "stage";
+          stageDiv.dataset.digitIndex = d;
+          stageDiv.dataset.stageIndex = s;
+          stageDiv.addEventListener("click", function() {
+            const dIndex = parseInt(this.dataset.digitIndex);
+            const sIndex = parseInt(this.dataset.stageIndex);
+            const maxState = currentConfig.beads[sIndex];
+            digitStates[dIndex][sIndex] = (digitStates[dIndex][sIndex] + 1) % maxState;
+            updateStageDisplay(this, dIndex, sIndex);
+            updateValueDisplay();
+          });
+          updateStageDisplay(stageDiv, d, s);
+          digitDiv.appendChild(stageDiv);
+        }
+        digitsContainer.appendChild(digitDiv);
       }
     }
 
-    // 各段のビーズ表示を更新する関数
-    function updateStageDisplay(stageDiv, stageIndex) {
-      stageDiv.innerHTML = ""; // クリア
+    // 各段の表示を更新する
+    function updateStageDisplay(stageDiv, digitIndex, stageIndex) {
+      stageDiv.innerHTML = "";
       const maxState = currentConfig.beads[stageIndex];
-      const currentState = currentStates[stageIndex];
-      // 下段の場合、maxState 個のビーズを表示し、左側から currentState 個を「active」とする
+      const currentState = digitStates[digitIndex][stageIndex];
       for (let i = 0; i < maxState; i++) {
         const beadSpan = document.createElement("span");
-        // active なら塗りつぶし、非active なら空の丸で表現
         beadSpan.className = "bead" + (i < currentState ? " active" : "");
         beadSpan.textContent = i < currentState ? "●" : "○";
         stageDiv.appendChild(beadSpan);
       }
     }
 
-    // 現在の値の表示を更新する関数
+    // 全体の値表示を更新する
     function updateValueDisplay() {
-      const val = calculateValue();
-      valueDisplay.textContent = "現在の値: " + val;
+      const overallValue = calculateOverallValue();
+      valueDisplay.textContent = "現在の値: " + overallValue;
     }
 
-    // n の選択が変更されたとき、そろばんを初期化する
-    function initSoroban(n) {
-      currentConfig = configs[n];
-      if (!currentConfig) {
-        alert("選択された n は未対応です。");
+    // nと桁数に基づいてそろばんを初期化する
+    function initSoroban(n, dCount) {
+      base = parseInt(n);
+      digitCount = parseInt(dCount);
+      if (isNaN(base) || base < 2) {
+        alert("正しい n (2以上) を入力してください。");
         return;
       }
-      // 各段の状態を 0 に初期化
-      currentStates = currentConfig.beads.map(() => 0);
-      // 重みを計算
-      weights = calculateWeights(currentConfig.beads);
-      // そろばんウィジェットを描画
-      renderSoroban();
+      if (isNaN(digitCount) || digitCount < 1) {
+        alert("正しい桁数を入力してください。");
+        return;
+      }
+      const beads = getBeads(base);
+      currentConfig = { beads: beads };
+      weights = calculateWeights(beads);
+      digitStates = [];
+      for (let i = 0; i < digitCount; i++) {
+        let states = [];
+        for (let j = 0; j < beads.length; j++) {
+          states.push(0);
+        }
+        digitStates.push(states);
+      }
+      renderAllDigits();
       updateValueDisplay();
     }
 
-    // 初期表示：デフォルト選択の n で初期化
-    initSoroban(nSelect.value);
+    /**
+     * 与えられた全体値 newOverallValue に基づいてそろばんの各桁の状態を更新する
+     * useMod が true の場合は mod 演算を行い、false の場合は
+     * 表現範囲外ならエラーを出す。
+     */
+    function updateAbacusForValue(newOverallValue, useMod = true) {
+      const maxVal = Math.pow(base, digitCount);
+      if (!useMod) {
+        if (newOverallValue < 0 || newOverallValue >= maxVal) {
+          alert("入力値は表現可能な範囲（0 ～ " + (maxVal - 1) + "）外です。");
+          return false;
+        }
+      } else {
+        // mod を適用（負の値にも対応）
+        newOverallValue = ((newOverallValue % maxVal) + maxVal) % maxVal;
+      }
+      for (let d = 0; d < digitCount; d++) {
+        const power = Math.pow(base, (digitCount - 1 - d));
+        const digitVal = Math.floor(newOverallValue / power) % base;
+        let remaining = digitVal;
+        for (let i = 0; i < currentConfig.beads.length; i++) {
+          digitStates[d][i] = remaining % currentConfig.beads[i];
+          remaining = Math.floor(remaining / currentConfig.beads[i]);
+        }
+      }
+      renderAllDigits();
+      updateValueDisplay();
+      return true;
+    }
 
-    // n の選択が変更された場合のイベントリスナー
-    nSelect.addEventListener("change", function() {
-      initSoroban(this.value);
+    // 初期表示（デフォルト n=12, 桁数=6）
+    initSoroban(nInput.value, digitCountInput.value);
+
+    // 更新ボタン：入力値に基づいて初期化
+    updateButton.addEventListener("click", function() {
+      initSoroban(nInput.value, digitCountInput.value);
+    });
+
+    // ＋1ボタン：現在の値に1を足し、mod 演算で更新
+    incrementButton.addEventListener("click", function() {
+      const currentValue = calculateOverallValue();
+      const newValue = currentValue + 1;
+      updateAbacusForValue(newValue, true);
+    });
+
+    // −1ボタン：現在の値から1を引き、mod 演算で更新
+    decrementButton.addEventListener("click", function() {
+      const currentValue = calculateOverallValue();
+      const newValue = currentValue - 1;
+      updateAbacusForValue(newValue, true);
+    });
+
+    // 直接値入力の「設定」ボタン：エラーチェック付き
+    setValueButton.addEventListener("click", function() {
+      const newVal = parseInt(valueInput.value);
+      if (isNaN(newVal)) {
+        alert("正しい値を入力してください。");
+        return;
+      }
+      // useMod を false にして、範囲外ならエラー
+      updateAbacusForValue(newVal, false);
     });
   </script>
 </body>
