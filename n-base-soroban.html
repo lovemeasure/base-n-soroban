@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>n進法一般化そろばん</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .soroban-container {
+      display: inline-block;
+      margin-top: 20px;
+      border: 2px solid #ccc;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .stage {
+      margin: 10px;
+      cursor: pointer;
+    }
+    .bead {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border: 2px solid #333;
+      border-radius: 50%;
+      margin: 5px;
+      line-height: 30px;
+      text-align: center;
+      font-size: 18px;
+    }
+    .active {
+      background-color: #333;
+      color: white;
+    }
+    #value-display {
+      font-size: 24px;
+      margin-top: 20px;
+    }
+    #n-select {
+      font-size: 16px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>n進法一般化そろばん</h1>
+  <div>
+    <label for="n-select">n進法の n を選択：</label>
+    <select id="n-select">
+      <option value="2">2進法</option>
+      <option value="6">6進法</option>
+      <option value="7">7進法</option>
+      <option value="8">8進法</option>
+      <option value="12" selected>12進法</option>
+      <option value="30">30進法</option>
+    </select>
+  </div>
+
+  <!-- そろばんウィジェット -->
+  <div class="soroban-container" id="soroban-container"></div>
+
+  <!-- 現在の値の表示 -->
+  <div id="value-display">現在の値: 0</div>
+
+  <script>
+    // プリセットの設定：各 n に対する段構成
+    // 配列の順番は「下段（1段目）、中段、上段…」の順です。
+    const configs = {
+      2: { beads: [2] },         // 2進法: 1段（2状態）
+      6: { beads: [3, 2] },       // 6進法: 下段3状態, 上段2状態
+      7: { beads: [7] },         // 7進法: 1段（7状態）
+      8: { beads: [2, 2, 2] },    // 8進法: 3段すべて2状態（8=2×2×2）
+      12: { beads: [3, 2, 2] },   // 12進法: 下段3状態, 中段2状態, 上段2状態
+      30: { beads: [5, 3, 2] }    // 30進法: 下段5状態, 中段3状態, 上段2状態
+    };
+
+    let currentConfig = null;
+    let currentStates = []; // 各段の現在の状態（下段～上段）
+    let weights = [];       // 各段の重み（下段から順に1, 下段の状態数, 下段×中段, …）
+
+    const sorobanContainer = document.getElementById("soroban-container");
+    const valueDisplay = document.getElementById("value-display");
+    const nSelect = document.getElementById("n-select");
+
+    // 重みを計算する関数（下段から順に、初期値1から掛け合わせていく）
+    function calculateWeights(beadsArray) {
+      let w = [];
+      let prod = 1;
+      for (let i = 0; i < beadsArray.length; i++) {
+        w.push(prod);
+        prod *= beadsArray[i];
+      }
+      return w;
+    }
+
+    // 現在の値を計算する関数
+    function calculateValue() {
+      let val = 0;
+      for (let i = 0; i < currentStates.length; i++) {
+        val += currentStates[i] * weights[i];
+      }
+      return val;
+    }
+
+    // そろばんウィジェットを描画する関数
+    function renderSoroban() {
+      // クリア
+      sorobanContainer.innerHTML = "";
+      // 表示順序：上段を上に、下段を下に表示（configs.beads の順番は下段～上段なので逆順に描画）
+      const beadsArray = currentConfig.beads;
+      for (let stageIndex = beadsArray.length - 1; stageIndex >= 0; stageIndex--) {
+        const stageDiv = document.createElement("div");
+        stageDiv.className = "stage";
+        stageDiv.dataset.stageIndex = stageIndex; // どの段かを識別
+
+        // クリックでその段の状態を更新（クリックごとに 1 加算、上限に達したら 0 に戻る）
+        stageDiv.addEventListener("click", function() {
+          const idx = parseInt(this.dataset.stageIndex);
+          currentStates[idx] = (currentStates[idx] + 1) % beadsArray[idx];
+          updateStageDisplay(this, idx);
+          updateValueDisplay();
+        });
+
+        // 各段のビーズ表示を初期化
+        updateStageDisplay(stageDiv, stageIndex);
+        sorobanContainer.appendChild(stageDiv);
+      }
+    }
+
+    // 各段のビーズ表示を更新する関数
+    function updateStageDisplay(stageDiv, stageIndex) {
+      stageDiv.innerHTML = ""; // クリア
+      const maxState = currentConfig.beads[stageIndex];
+      const currentState = currentStates[stageIndex];
+      // 下段の場合、maxState 個のビーズを表示し、左側から currentState 個を「active」とする
+      for (let i = 0; i < maxState; i++) {
+        const beadSpan = document.createElement("span");
+        // active なら塗りつぶし、非active なら空の丸で表現
+        beadSpan.className = "bead" + (i < currentState ? " active" : "");
+        beadSpan.textContent = i < currentState ? "●" : "○";
+        stageDiv.appendChild(beadSpan);
+      }
+    }
+
+    // 現在の値の表示を更新する関数
+    function updateValueDisplay() {
+      const val = calculateValue();
+      valueDisplay.textContent = "現在の値: " + val;
+    }
+
+    // n の選択が変更されたとき、そろばんを初期化する
+    function initSoroban(n) {
+      currentConfig = configs[n];
+      if (!currentConfig) {
+        alert("選択された n は未対応です。");
+        return;
+      }
+      // 各段の状態を 0 に初期化
+      currentStates = currentConfig.beads.map(() => 0);
+      // 重みを計算
+      weights = calculateWeights(currentConfig.beads);
+      // そろばんウィジェットを描画
+      renderSoroban();
+      updateValueDisplay();
+    }
+
+    // 初期表示：デフォルト選択の n で初期化
+    initSoroban(nSelect.value);
+
+    // n の選択が変更された場合のイベントリスナー
+    nSelect.addEventListener("change", function() {
+      initSoroban(this.value);
+    });
+  </script>
+</body>
+</html>
