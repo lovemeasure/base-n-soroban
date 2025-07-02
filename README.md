@@ -1,5 +1,5 @@
 ## URL
-https://ie.u-ryukyu.ac.jp/~e225746/playground/n-base-soroban.html
+https://ie.u-ryukyu.ac.jp/~e225746/playground/base-n-soroban.html
 
 ## Webサイト概要
 
@@ -20,5 +20,5 @@ https://ie.u-ryukyu.ac.jp/~e225746/playground/n-base-soroban.html
 「10進法至上主義」に基づいて、様々なものが10進法で表記され、製品が作られる世の中.  
 特定の記数法に囚われることなく、自由な世界を創造するのが記数法自由主義の使命です.
 
-ここは、任意の \( n \) 進法による10進法そろばんの一般化である「n進法そろばん (n-base-soroban)」を体験することのできるサイトです.  
+ここは、任意の \( n \) 進法による10進法そろばんの一般化である「n進法そろばん (base-n-soroban)」を体験することのできるサイトです.  
 10進法ではないそろばんを色々触って楽しんでくれると幸いです.
